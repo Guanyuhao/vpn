@@ -548,7 +548,10 @@ sudo bash v2ray-manage.sh
 - ✅ 查看服务状态
 - ✅ 查看实时日志
 - ✅ 重启/启动/停止服务
-- ✅ 添加新客户端
+- ✅ 添加新客户端 (VLESS)
+- ✅ **一键添加 Shadowsocks**
+- ✅ **一键添加 VMess (TCP/mKCP/QUIC)**
+- ✅ **一键添加 VMess (WS/H2/gRPC + TLS)**
 - ✅ 查看当前配置
 - ✅ 测试配置文件
 - ✅ 更新 V2Ray
@@ -670,6 +673,62 @@ systemctl restart v2ray
 ```
 
 ## 🎓 高级配置
+
+### 添加 Shadowsocks 配置
+
+使用管理脚本一键添加 Shadowsocks：
+
+```bash
+sudo bash v2ray-manage.sh
+# 选择 7. 一键添加 Shadowsocks
+```
+
+**支持的加密方法**：
+- `aes-256-gcm` - 推荐，性能好
+- `aes-128-gcm` - 性能好
+- `chacha20-poly1305` - 移动设备友好
+- `2022-blake3-aes-128-gcm` - 最新加密方法
+- `2022-blake3-aes-256-gcm` - 最新加密方法
+
+**客户端配置示例**：
+```
+服务器地址: your_server_ip
+端口: 12345
+密码: generated_password
+加密方法: aes-256-gcm
+```
+
+### 添加 VMess 配置
+
+#### VMess (TCP/mKCP/QUIC)
+
+使用管理脚本一键添加：
+
+```bash
+sudo bash v2ray-manage.sh
+# 选择 8. 一键添加 VMess (TCP/mKCP/QUIC)
+```
+
+**传输方式说明**：
+- **TCP**：标准传输，稳定可靠
+- **mKCP**：伪装传输，抗封锁能力强，推荐
+- **QUIC**：基于 UDP，速度快
+
+#### VMess (WS/H2/gRPC + TLS)
+
+使用管理脚本一键添加：
+
+```bash
+sudo bash v2ray-manage.sh
+# 选择 9. 一键添加 VMess (WS/H2/gRPC + TLS)
+```
+
+**传输方式说明**：
+- **WebSocket (WS)**：WebSocket 传输，需要 Nginx 反向代理
+- **HTTP/2 (H2)**：HTTP/2 传输，需要 Nginx 反向代理
+- **gRPC**：gRPC 传输，抗封锁能力强，推荐
+
+**注意**：需要先配置好 SSL 证书和 Nginx 反向代理
 
 ### 修改 WebSocket 路径
 
