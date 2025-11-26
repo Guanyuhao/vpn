@@ -56,10 +56,6 @@
 - ✅ 自动创建 Release
 - ✅ 打包文件（tar.gz 和 zip）
 - ✅ 上传到 GitHub Release
-- ✅ 从 GitHub Secrets 获取域名并在 Release 说明中使用
-
-**配置 GitHub Secret**：
-- `SERVER_DOMAIN` - 服务器域名（可选，如果未设置会使用占位符）
 
 **使用方法**：
 ```bash
