@@ -1,10 +1,12 @@
 # V2Ray VPN 服务器搭建指南
 
-本指南提供在香港服务器上搭建 V2Ray VPN 的完整解决方案，专门针对中国大陆用户长期使用，重点优化抗封锁能力和稳定性。
+在服务器上搭建 V2Ray VPN 的完整解决方案，专门针对xx用户长期使用，重点优化抗封锁能力和稳定性。
+
+本方案使用 **VLESS + WebSocket + TLS** 配置，提供最强的抗封锁能力和长期稳定性。
 
 ## 📋 目录
 
-- [方案选择](#方案选择)
+- [方案特点](#方案特点)
 - [快速开始](#快速开始)
 - [详细安装步骤](#详细安装步骤)
 - [客户端配置](#客户端配置)
@@ -13,45 +15,37 @@
 - [故障排查](#故障排查)
 - [最佳实践](#最佳实践)
 
-## 🎯 方案选择
+## 🎯 方案特点
 
-### 方案 A: VLESS + WebSocket + TLS（推荐，最强抗封锁）
+### VLESS + WebSocket + TLS
 
-**特点**：
-- ✅ **最强抗封锁能力** - WebSocket + TLS 伪装成 HTTPS 流量
-- ✅ **长期稳定** - 流量特征与正常网站完全一致
-- ✅ **安全性高** - TLS 加密，难以被检测
-- ⚠️ **需要域名** - 需要拥有域名并配置 DNS 解析
+**核心优势**：
+- ✅ **最强抗封锁能力** - WebSocket + TLS 伪装成 HTTPS 流量，与正常网站流量完全一致
+- ✅ **长期稳定** - 流量特征难以被识别和阻断
+- ✅ **安全性高** - TLS 加密，提供企业级安全保障
+- ✅ **性能优秀** - VLESS 协议轻量高效，延迟低
+- ✅ **易于维护** - 配置简单，管理方便
 
-**适用场景**：
-- 追求最强抗封锁能力
-- 需要长期稳定运行
-- 有域名资源
-- 网络环境严格
+**技术架构**：
+- 协议：VLESS（V2Ray 轻量级协议）
+- 传输：WebSocket（伪装成 HTTP 请求）
+- 加密：TLS（HTTPS 加密）
+- 反向代理：Nginx（处理 WebSocket 和 TLS）
 
-### 方案 B: VMESS + WebSocket（无需域名）
-
-**特点**：
-- ✅ **无需域名** - 直接使用 IP 地址
-- ✅ **配置简单** - 快速部署
-- ✅ **抗封锁能力中等** - WebSocket 伪装
-- ⚠️ **抗封锁能力较弱** - 不如 TLS 版本
-
-**适用场景**：
-- 暂时没有域名
-- 快速测试部署
-- 网络环境相对宽松
-
-**建议**：优先使用方案 A，如果没有域名可以先使用方案 B，后续再升级到方案 A。
+**前置要求**：
+- ⚠️ **需要域名** - 必须拥有域名并配置 DNS 解析
+- ⚠️ **需要服务器** - Ubuntu 18.04+ 或 Debian 9+
+- ⚠️ **需要 Root 权限** - 用于安装和配置服务
 
 ## 🚀 快速开始
 
-### 方案 A: VLESS + WebSocket + TLS（推荐）
+### 一键安装
 
 ```bash
 # 1. 准备域名
 # - 购买域名（如：example.com）
 # - 将域名 A 记录解析到服务器 IP
+# - 等待 DNS 解析生效（通常几分钟到几小时）
 
 # 2. 上传脚本到服务器
 scp v2ray-server-setup.sh root@your_server_ip:/root/
@@ -65,114 +59,147 @@ sudo bash v2ray-server-setup.sh
 # 5. 保存输出的配置信息
 ```
 
-### 方案 B: VMESS + WebSocket（无需域名）
+### 配置防火墙
 
 ```bash
-# 1. 上传脚本到服务器
-scp v2ray-vmess-setup.sh root@your_server_ip:/root/
+# 开放必要端口
+ufw allow 443/tcp   # HTTPS/V2Ray
+ufw allow 80/tcp    # HTTP（Let's Encrypt 证书申请需要）
+ufw allow 22/tcp    # SSH（如果还没开放）
 
-# 2. 执行安装
-ssh root@your_server_ip
-chmod +x v2ray-vmess-setup.sh
-sudo bash v2ray-vmess-setup.sh
-
-# 3. 保存输出的配置信息
+# 启用防火墙
+ufw enable
 ```
 
 ## 📖 详细安装步骤
 
 ### 前置准备
 
-1. **服务器要求**
-   - Ubuntu 18.04+ 或 Debian 9+
-   - 至少 512MB 内存
-   - Root 权限
-   - 已配置防火墙
+#### 1. 服务器要求
 
-2. **域名准备（方案 A）**
-   - 购买域名（推荐：Namecheap、Cloudflare、GoDaddy）
-   - 将域名 A 记录解析到服务器 IP
-   - 等待 DNS 解析生效（通常几分钟到几小时）
+- **操作系统**：Ubuntu 18.04+ 或 Debian 9+
+- **内存**：至少 512MB（推荐 1GB+）
+- **磁盘**：至少 10GB 可用空间
+- **网络**：公网 IP 地址
+- **权限**：Root 或 sudo 权限
 
-3. **检查 DNS 解析**
+#### 2. 域名准备
+
+**购买域名**（推荐服务商）：
+- [Cloudflare](https://www.cloudflare.com/) - 免费 DNS，CDN 加速
+- [Namecheap](https://www.namecheap.com/) - 价格实惠
+- [GoDaddy](https://www.godaddy.com/) - 老牌服务商
+
+**配置 DNS 解析**：
+1. 登录域名管理后台
+2. 添加 A 记录：
+   - 主机记录：`@` 或 `www`（根据需求）
+   - 记录值：你的服务器 IP 地址
+   - TTL：600（10分钟）或默认值
+
+**验证 DNS 解析**：
 ```bash
 # 检查域名是否解析到服务器 IP
 ping your_domain.com
-# 或
+
+# 或使用其他工具
 nslookup your_domain.com
+dig your_domain.com
+
+# 确保返回的是你的服务器 IP
 ```
+
+**等待 DNS 传播**：
+- 通常需要几分钟到几小时
+- 全球 DNS 服务器同步可能需要更长时间
+- 可以使用在线工具检查：https://www.whatsmydns.net/
 
 ### 安装步骤
 
-#### 方案 A: VLESS + TLS
+#### 步骤 1: 上传脚本
 
-1. **上传脚本**
 ```bash
+# 从本地电脑上传脚本到服务器
 scp v2ray-server-setup.sh root@your_server_ip:/root/
 ```
 
-2. **SSH 登录服务器**
+#### 步骤 2: SSH 登录服务器
+
 ```bash
 ssh root@your_server_ip
 ```
 
-3. **执行安装脚本**
+#### 步骤 3: 执行安装脚本
+
 ```bash
+# 添加执行权限
 chmod +x v2ray-server-setup.sh
+
+# 执行安装（需要 root 权限）
 sudo bash v2ray-server-setup.sh
 ```
 
-4. **按提示输入信息**
-   - 域名：输入你的域名（如：example.com）
-   - WebSocket 路径：默认 `/v2ray` 或自定义（如：`/ws`、`/api`）
+#### 步骤 4: 输入配置信息
 
-5. **等待安装完成**
-   - 脚本会自动安装 V2Ray、Nginx、Certbot
-   - 自动申请 SSL 证书
-   - 配置 Nginx 反向代理
-   - 启动服务
+脚本会提示你输入以下信息：
 
-6. **保存配置信息**
-   - 服务器地址：你的域名
-   - 服务器端口：443
-   - UUID：脚本生成的 UUID
-   - WebSocket 路径：你输入的路径
-   - TLS：已启用
+1. **域名**（必填）
+   ```
+   请输入你的域名（用于 TLS 证书，必须输入）: example.com
+   ```
+   - 输入你购买的域名
+   - 确保域名已解析到服务器 IP
 
-#### 方案 B: VMESS（无需域名）
+2. **WebSocket 路径**（可选）
+   ```
+   请输入 WebSocket 路径（默认: /v2ray，建议使用随机路径）: 
+   ```
+   - 默认：`/v2ray`
+   - 建议：使用随机路径以提高安全性
+   - 如果选择使用随机路径，脚本会自动生成
 
-1. **上传脚本**
-```bash
-scp v2ray-vmess-setup.sh root@your_server_ip:/root/
+3. **邮箱地址**（可选）
+   ```
+   请输入邮箱地址（用于 Let's Encrypt 证书通知，可选）: 
+   ```
+   - 用于接收 SSL 证书到期提醒
+   - 默认使用：`admin@your_domain.com`
+
+#### 步骤 5: 等待安装完成
+
+脚本会自动执行以下操作：
+1. ✅ 更新系统包
+2. ✅ 安装 V2Ray
+3. ✅ 安装 Nginx
+4. ✅ 安装 Certbot（SSL 证书工具）
+5. ✅ 生成 UUID（客户端标识）
+6. ✅ 配置 V2Ray
+7. ✅ 配置 Nginx 反向代理
+8. ✅ 申请 Let's Encrypt SSL 证书
+9. ✅ 启动所有服务
+
+#### 步骤 6: 保存配置信息
+
+安装完成后，脚本会输出以下配置信息，**请务必保存**：
+
+```
+==========================================
+安装完成！
+==========================================
+服务器地址: your_domain.com
+服务器端口: 443
+UUID: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+WebSocket 路径: /v2ray
+TLS: 启用
+==========================================
 ```
 
-2. **执行安装**
-```bash
-ssh root@your_server_ip
-chmod +x v2ray-vmess-setup.sh
-sudo bash v2ray-vmess-setup.sh
-```
-
-3. **保存配置信息**
-   - 服务器 IP：脚本输出的 IP
-   - 服务器端口：随机生成的端口
-   - UUID：脚本生成的 UUID
-   - WebSocket 路径：随机生成的路径
-
-### 配置防火墙
-
-```bash
-# 方案 A（VLESS + TLS）
-ufw allow 443/tcp
-ufw allow 80/tcp   # Let's Encrypt 证书申请需要
-
-# 方案 B（VMESS）
-# 查看脚本输出的端口号，然后开放
-ufw allow <端口号>/tcp
-
-# 启用防火墙
-ufw enable
-```
+**配置信息说明**：
+- **服务器地址**：你的域名
+- **服务器端口**：443（HTTPS 标准端口）
+- **UUID**：客户端唯一标识，类似密码
+- **WebSocket 路径**：你设置的路径
+- **TLS**：已启用（HTTPS 加密）
 
 ## 📱 客户端配置
 
@@ -181,40 +208,35 @@ ufw enable
 #### 推荐客户端：V2RayU
 
 1. **下载安装**
-   - 访问：https://github.com/yanue/V2rayU
-   - 下载最新版本并安装
+   - GitHub：https://github.com/yanue/V2rayU
+   - 下载最新版本 DMG 文件
+   - 安装到应用程序
 
 2. **添加服务器**
    - 打开 V2RayU
    - 点击菜单栏图标 → 服务器设置
-   - 点击 + 号添加服务器
+   - 点击左下角 `+` 号添加服务器
+   - 选择类型：VLESS
 
-3. **配置信息（VLESS + TLS）**
-   - 地址：你的域名
-   - 端口：443
-   - UUID：服务器生成的 UUID
-   - 传输协议：WebSocket
-   - 路径：`/v2ray`（或你自定义的路径）
-   - TLS：启用
-   - 跳过证书验证：关闭（推荐）
+3. **配置服务器信息**
+   - **地址**：你的域名（如：example.com）
+   - **端口**：443
+   - **UUID**：服务器生成的 UUID
+   - **传输协议**：WebSocket
+   - **路径**：`/v2ray`（或你自定义的路径）
+   - **TLS**：启用
+   - **跳过证书验证**：关闭（推荐，更安全）
 
-4. **配置信息（VMESS）**
-   - 地址：服务器 IP
-   - 端口：脚本输出的端口
-   - UUID：服务器生成的 UUID
-   - 传输协议：WebSocket
-   - 路径：脚本输出的路径
-   - TLS：关闭
-
-5. **连接**
-   - 保存配置后，点击菜单栏图标 → 启动 V2Ray
+4. **连接使用**
+   - 保存配置
+   - 点击菜单栏图标 → 启动 V2Ray
    - 选择你添加的服务器
-   - 连接成功
+   - 连接成功后，菜单栏图标会显示为已连接状态
 
 #### 替代客户端：ClashX
 
 1. 下载安装 ClashX
-2. 创建配置文件，添加 V2Ray 节点
+2. 创建配置文件，添加 V2Ray VLESS 节点
 3. 启动代理
 
 ### Windows
@@ -222,139 +244,225 @@ ufw enable
 #### 推荐客户端：V2RayN
 
 1. **下载安装**
-   - 访问：https://github.com/2dust/v2rayN
-   - 下载最新版本并解压
+   - GitHub：https://github.com/2dust/v2rayN
+   - 下载最新版本 ZIP 文件
+   - 解压到任意目录
 
 2. **添加服务器**
-   - 打开 V2RayN
-   - 点击服务器 → 添加 VMESS/VLESS 服务器
+   - 打开 V2RayN.exe
+   - 点击服务器 → 添加 [VLESS] 服务器
+   - 或右键系统托盘图标 → 服务器 → 添加 [VLESS] 服务器
 
-3. **配置信息**
-   - 按照 macOS 的配置方式填入信息
+3. **配置服务器信息**
+   - **地址(Address)**：你的域名
+   - **端口(Port)**：443
+   - **用户ID(UUID)**：服务器生成的 UUID
+   - **传输协议(Network)**：ws
+   - **路径(Path)**：`/v2ray`
+   - **TLS**：tls
+   - **跳过证书验证**：false
+
+4. **连接使用**
    - 保存配置
-
-4. **连接**
    - 右键系统托盘图标 → 选择服务器
    - 点击"启用系统代理"
+   - 连接成功后，图标会显示为已连接状态
 
 ### iOS
 
 #### 推荐客户端：Shadowrocket（付费）
 
 1. **购买安装**
-   - App Store 搜索 Shadowrocket（需付费）
+   - App Store 搜索 Shadowrocket
+   - 价格：约 $2.99（一次性付费）
    - 购买并安装
 
 2. **添加服务器**
    - 打开 Shadowrocket
-   - 点击右上角 + 号
-   - 选择类型：VLESS 或 VMESS
+   - 点击右上角 `+` 号
+   - 选择类型：VLESS
 
-3. **配置信息**
-   - 填入服务器配置信息
-   - 保存
+3. **配置服务器信息**
+   - **服务器**：你的域名
+   - **端口**：443
+   - **UUID**：服务器生成的 UUID
+   - **传输方式**：WebSocket
+   - **路径**：`/v2ray`
+   - **TLS**：启用
 
-4. **连接**
+4. **连接使用**
+   - 保存配置
    - 选择服务器
-   - 点击连接
+   - 点击右上角连接按钮
+   - 连接成功后，状态栏会显示 VPN 图标
 
 ### Android
 
 #### 推荐客户端：V2RayNG
 
 1. **下载安装**
-   - Google Play 或 GitHub：https://github.com/2dust/v2rayNG
+   - Google Play：搜索 V2RayNG
+   - 或 GitHub：https://github.com/2dust/v2rayNG
    - 下载并安装
 
 2. **添加服务器**
    - 打开 V2RayNG
-   - 点击右上角 + 号
-   - 手动输入或扫描二维码
+   - 点击右上角 `+` 号
+   - 选择"手动输入"或"扫描二维码"（如果有）
 
-3. **配置信息**
-   - 填入服务器配置信息
-   - 保存
+3. **配置服务器信息**
+   - **地址**：你的域名
+   - **端口**：443
+   - **用户ID**：服务器生成的 UUID
+   - **传输协议**：WebSocket
+   - **路径**：`/v2ray`
+   - **TLS**：启用
 
-4. **连接**
+4. **连接使用**
+   - 保存配置
    - 选择服务器
-   - 点击连接按钮
+   - 点击右下角连接按钮（圆形按钮）
+   - 首次使用需要授予 VPN 权限
+   - 连接成功后，通知栏会显示 VPN 图标
 
 ## 🔧 服务器管理
 
-### 查看服务状态
+### 使用管理脚本（推荐）
+
+我们提供了一个便捷的管理脚本，可以快速执行常用操作：
+
+```bash
+# 上传管理脚本到服务器
+scp v2ray-manage.sh root@your_server_ip:/root/
+
+# 在服务器上运行
+ssh root@your_server_ip
+chmod +x v2ray-manage.sh
+sudo bash v2ray-manage.sh
+```
+
+**管理脚本功能**：
+- ✅ 查看服务状态
+- ✅ 查看实时日志
+- ✅ 重启/启动/停止服务
+- ✅ 添加新客户端
+- ✅ 查看当前配置
+- ✅ 测试配置文件
+- ✅ 更新 V2Ray
+- ✅ 查看连接统计
+- ✅ 备份/恢复配置
+
+### 手动管理命令
+
+#### 查看服务状态
 
 ```bash
 # 查看 V2Ray 状态
 systemctl status v2ray
 
-# 查看 Nginx 状态（方案 A）
+# 查看 Nginx 状态
 systemctl status nginx
+
+# 查看所有相关服务状态
+systemctl status v2ray nginx
 ```
 
-### 查看日志
+#### 查看日志
 
 ```bash
-# 查看 V2Ray 日志
+# 查看 V2Ray 实时日志（按 Ctrl+C 退出）
 journalctl -u v2ray -f
 
 # 查看最近 100 行日志
 journalctl -u v2ray -n 100
 
-# 查看 Nginx 日志（方案 A）
+# 查看 Nginx 实时日志
 journalctl -u nginx -f
+
+# 查看 Nginx 错误日志
 tail -f /var/log/nginx/error.log
 ```
 
-### 重启服务
+#### 重启服务
 
 ```bash
 # 重启 V2Ray
 systemctl restart v2ray
 
-# 重启 Nginx（方案 A）
+# 重启 Nginx
 systemctl restart nginx
 
 # 重启所有相关服务
 systemctl restart v2ray nginx
+
+# 检查服务状态
+systemctl status v2ray nginx
 ```
 
-### 编辑配置
+#### 停止/启动服务
+
+```bash
+# 停止服务
+systemctl stop v2ray nginx
+
+# 启动服务
+systemctl start v2ray nginx
+
+# 设置开机自启
+systemctl enable v2ray nginx
+```
+
+#### 编辑配置
 
 ```bash
 # 编辑 V2Ray 配置
 nano /usr/local/etc/v2ray/config.json
 
-# 编辑 Nginx 配置（方案 A）
+# 编辑 Nginx 配置
 nano /etc/nginx/sites-available/v2ray
 
-# 测试配置文件
+# 测试 V2Ray 配置文件
 /usr/local/bin/v2ray test -config /usr/local/etc/v2ray/config.json
-nginx -t  # 测试 Nginx 配置
+
+# 测试 Nginx 配置
+nginx -t
+
+# 重新加载 Nginx 配置（不中断服务）
+nginx -s reload
 ```
 
-### 添加新客户端
+#### 添加新客户端
 
-编辑 V2Ray 配置文件，在 `clients` 数组中添加新的 UUID：
-
-```bash
-nano /usr/local/etc/v2ray/config.json
-```
-
-添加新的客户端：
-```json
-{
-  "id": "新的-UUID-这里",
-  "flow": "xtls-rprx-vision"  // VLESS 需要
-}
-```
-
-生成新 UUID：
+1. **生成新 UUID**
 ```bash
 cat /proc/sys/kernel/random/uuid
 ```
 
-重启服务：
+2. **编辑配置文件**
 ```bash
+nano /usr/local/etc/v2ray/config.json
+```
+
+3. **在 `clients` 数组中添加新客户端**
+```json
+"clients": [
+  {
+    "id": "existing-uuid-1",
+    "flow": "xtls-rprx-vision"
+  },
+  {
+    "id": "new-uuid-here",
+    "flow": "xtls-rprx-vision"
+  }
+]
+```
+
+4. **测试并重启服务**
+```bash
+# 测试配置
+/usr/local/bin/v2ray test -config /usr/local/etc/v2ray/config.json
+
+# 重启服务
 systemctl restart v2ray
 ```
 
@@ -362,30 +470,41 @@ systemctl restart v2ray
 
 ### 修改 WebSocket 路径
 
+如果需要修改 WebSocket 路径：
+
+1. **编辑 V2Ray 配置**
 ```bash
-# 编辑 V2Ray 配置
 nano /usr/local/etc/v2ray/config.json
+```
+修改 `wsSettings` 中的 `path` 值
 
-# 修改 wsSettings 中的 path
-# 同时修改 Nginx 配置（方案 A）
+2. **编辑 Nginx 配置**
+```bash
 nano /etc/nginx/sites-available/v2ray
+```
+修改 `location` 后的路径
 
-# 重启服务
+3. **重启服务**
+```bash
 systemctl restart v2ray nginx
 ```
 
 ### 配置多用户
 
-在 `clients` 数组中添加多个用户：
+在 `clients` 数组中添加多个用户，每个用户使用不同的 UUID：
 
 ```json
 "clients": [
   {
-    "id": "uuid-1",
+    "id": "uuid-user-1",
     "flow": "xtls-rprx-vision"
   },
   {
-    "id": "uuid-2",
+    "id": "uuid-user-2",
+    "flow": "xtls-rprx-vision"
+  },
+  {
+    "id": "uuid-user-3",
     "flow": "xtls-rprx-vision"
   }
 ]
@@ -393,16 +512,32 @@ systemctl restart v2ray nginx
 
 ### 启用 CDN（Cloudflare）
 
-1. 将域名 DNS 解析改为 Cloudflare
-2. 在 Cloudflare 中启用代理（橙色云朵）
-3. 在 Cloudflare SSL/TLS 设置中选择"完全"模式
-4. 客户端连接时使用 Cloudflare 的 IP
+使用 Cloudflare CDN 可以进一步提高抗封锁能力：
+
+1. **将域名 DNS 解析改为 Cloudflare**
+   - 在 Cloudflare 添加你的域名
+   - 将 DNS 服务器改为 Cloudflare 提供的地址
+
+2. **在 Cloudflare 中启用代理**
+   - 找到你的域名 A 记录
+   - 点击云朵图标，使其变为橙色（启用代理）
+
+3. **配置 SSL/TLS**
+   - 进入 SSL/TLS 设置
+   - 加密模式选择"完全"（Full）
+   - 确保"始终使用 HTTPS"已启用
+
+4. **客户端配置**
+   - 客户端连接时使用 Cloudflare 的 IP
+   - 或直接使用域名（Cloudflare 会自动处理）
 
 ### 配置自动更新
 
+创建自动更新脚本：
+
 ```bash
 # 创建更新脚本
-cat > /usr/local/bin/update-v2ray.sh <<EOF
+cat > /usr/local/bin/update-v2ray.sh <<'EOF'
 #!/bin/bash
 bash <(curl -L https://raw.githubusercontent.com/v2fly/fhs-install-v2ray/master/install-release.sh)
 systemctl restart v2ray
@@ -410,9 +545,10 @@ EOF
 
 chmod +x /usr/local/bin/update-v2ray.sh
 
-# 添加到 crontab（每月更新一次）
+# 添加到 crontab（每月 1 号凌晨更新）
 crontab -e
-# 添加：0 0 1 * * /usr/local/bin/update-v2ray.sh
+# 添加以下行：
+# 0 0 1 * * /usr/local/bin/update-v2ray.sh
 ```
 
 ### SSL 证书自动续期
@@ -420,128 +556,276 @@ crontab -e
 Let's Encrypt 证书有效期 90 天，Certbot 会自动续期。检查续期状态：
 
 ```bash
-# 测试续期
+# 测试续期（不会实际续期）
 certbot renew --dry-run
 
-# 查看证书到期时间
+# 查看证书信息
 certbot certificates
+
+# 手动续期（如果需要）
+certbot renew
+
+# 查看续期日志
+journalctl -u certbot.timer
 ```
+
+Certbot 会自动配置定时任务，无需手动操作。
 
 ## 🔍 故障排查
 
 ### 连接失败
 
-1. **检查服务状态**
+#### 1. 检查服务状态
+
 ```bash
+# 检查 V2Ray 服务
 systemctl status v2ray
-systemctl status nginx  # 方案 A
+
+# 检查 Nginx 服务
+systemctl status nginx
+
+# 如果服务未运行，启动服务
+systemctl start v2ray nginx
 ```
 
-2. **检查防火墙**
+#### 2. 检查防火墙
+
 ```bash
+# 查看防火墙状态
 ufw status
-# 确保端口已开放
+
+# 确保以下端口已开放
+ufw allow 443/tcp
+ufw allow 80/tcp
+ufw allow 22/tcp
+
+# 如果防火墙未启用，启用它
+ufw enable
 ```
 
-3. **检查端口占用**
+#### 3. 检查端口占用
+
 ```bash
-netstat -tulpn | grep 443  # 方案 A
-netstat -tulpn | grep <端口号>  # 方案 B
+# 检查 443 端口是否被占用
+netstat -tulpn | grep :443
+
+# 检查 80 端口是否被占用
+netstat -tulpn | grep :80
+
+# 如果端口被其他程序占用，需要停止该程序或修改配置
 ```
 
-4. **检查日志**
+#### 4. 检查日志
+
 ```bash
+# 查看 V2Ray 日志
 journalctl -u v2ray -n 50
-journalctl -u nginx -n 50  # 方案 A
+
+# 查看 Nginx 日志
+journalctl -u nginx -n 50
+tail -f /var/log/nginx/error.log
+
+# 查看实时日志
+journalctl -u v2ray -f
 ```
 
-### SSL 证书问题（方案 A）
+#### 5. 测试配置文件
 
-1. **检查证书是否存在**
+```bash
+# 测试 V2Ray 配置
+/usr/local/bin/v2ray test -config /usr/local/etc/v2ray/config.json
+
+# 测试 Nginx 配置
+nginx -t
+```
+
+### SSL 证书问题
+
+#### 1. 检查证书是否存在
+
 ```bash
 ls -la /etc/letsencrypt/live/your_domain.com/
 ```
 
-2. **重新申请证书**
+应该看到以下文件：
+- `cert.pem` - 证书文件
+- `chain.pem` - 证书链
+- `fullchain.pem` - 完整证书链
+- `privkey.pem` - 私钥
+
+#### 2. 重新申请证书
+
+如果证书不存在或已过期：
+
 ```bash
-certbot certonly --nginx -d your_domain.com
+# 停止 Nginx（申请证书时需要）
+systemctl stop nginx
+
+# 申请证书
+certbot certonly --standalone -d your_domain.com
+
+# 启动 Nginx
+systemctl start nginx
+
+# 重启 V2Ray
+systemctl restart v2ray
 ```
 
-3. **检查 Nginx 配置**
+#### 3. 检查 Nginx 配置
+
 ```bash
+# 测试 Nginx 配置
 nginx -t
+
+# 如果配置有误，检查配置文件
+nano /etc/nginx/sites-available/v2ray
 ```
 
-### DNS 解析问题（方案 A）
+### DNS 解析问题
 
-1. **检查 DNS 解析**
+#### 1. 检查 DNS 解析
+
 ```bash
+# 使用 ping 检查
 ping your_domain.com
+
+# 使用 nslookup 检查
 nslookup your_domain.com
+
+# 使用 dig 检查（更详细）
 dig your_domain.com
+dig your_domain.com @8.8.8.8  # 使用 Google DNS
 ```
 
-2. **等待 DNS 传播**
-   - DNS 解析可能需要几分钟到几小时
-   - 使用 `dig` 命令检查不同 DNS 服务器的解析结果
+#### 2. 等待 DNS 传播
+
+- DNS 解析可能需要几分钟到几小时才能全球生效
+- 使用在线工具检查：https://www.whatsmydns.net/
+- 确保所有 DNS 服务器都返回正确的 IP
+
+#### 3. 检查域名配置
+
+- 确保 A 记录指向正确的服务器 IP
+- 确保没有 CNAME 记录冲突
+- 检查 TTL 设置是否合理
 
 ### 速度慢
 
-1. **检查服务器带宽**
+#### 1. 检查服务器带宽
+
 ```bash
 # 安装 speedtest
 apt-get install speedtest-cli
+
+# 测试服务器带宽
 speedtest-cli
+
+# 或使用其他工具
+curl -s https://raw.githubusercontent.com/sivel/speedtest-cli/master/speedtest.py | python3 -
 ```
 
-2. **检查服务器负载**
+#### 2. 检查服务器负载
+
 ```bash
+# 查看系统负载
 top
-htop
+htop  # 如果已安装
+
+# 查看 CPU 和内存使用
+free -h
+df -h
 ```
 
-3. **尝试更换端口**（方案 B）
-   - 某些端口可能被限速
-   - 编辑配置文件更换端口
+#### 3. 优化系统参数
+
+参考"最佳实践"章节中的性能优化部分。
+
+### 其他问题
+
+#### 客户端连接后无法访问网站
+
+1. 检查客户端配置是否正确
+2. 检查系统代理设置
+3. 尝试重启客户端
+4. 检查防火墙规则
+
+#### 证书即将过期
+
+Let's Encrypt 证书会自动续期，但可以手动检查：
+
+```bash
+# 查看证书到期时间
+certbot certificates
+
+# 手动续期
+certbot renew
+```
 
 ## 💡 最佳实践
 
 ### 安全性
 
-1. **使用强密码**
-   - SSH 使用密钥认证
-   - 禁用 root 登录（推荐）
+#### 1. 使用强密码和密钥认证
 
-2. **配置防火墙**
 ```bash
-# 只开放必要端口
-ufw allow 22/tcp    # SSH
-ufw allow 443/tcp   # V2Ray（方案 A）
-ufw allow 80/tcp    # HTTP（证书申请）
-ufw enable
+# 禁用密码登录，使用 SSH 密钥
+nano /etc/ssh/sshd_config
+# 设置：PasswordAuthentication no
+
+# 重启 SSH 服务
+systemctl restart sshd
 ```
 
-3. **定期更新**
+#### 2. 配置防火墙
+
+```bash
+# 只开放必要端口
+ufw default deny incoming
+ufw default allow outgoing
+ufw allow 22/tcp    # SSH
+ufw allow 443/tcp   # HTTPS/V2Ray
+ufw allow 80/tcp    # HTTP（证书申请）
+
+# 启用防火墙
+ufw enable
+
+# 查看防火墙状态
+ufw status verbose
+```
+
+#### 3. 定期更新
+
 ```bash
 # 更新系统
 apt-get update && apt-get upgrade -y
 
 # 更新 V2Ray
 bash <(curl -L https://raw.githubusercontent.com/v2fly/fhs-install-v2ray/master/install-release.sh)
+
+# 重启服务
+systemctl restart v2ray nginx
 ```
 
-4. **备份配置**
-```bash
-# 备份 V2Ray 配置
-cp /usr/local/etc/v2ray/config.json ~/v2ray-config-backup.json
+#### 4. 备份配置
 
-# 备份 Nginx 配置（方案 A）
-cp /etc/nginx/sites-available/v2ray ~/nginx-v2ray-backup.conf
+```bash
+# 创建备份目录
+mkdir -p ~/v2ray-backups
+
+# 备份 V2Ray 配置
+cp /usr/local/etc/v2ray/config.json ~/v2ray-backups/v2ray-config-$(date +%Y%m%d).json
+
+# 备份 Nginx 配置
+cp /etc/nginx/sites-available/v2ray ~/v2ray-backups/nginx-v2ray-$(date +%Y%m%d).conf
+
+# 定期备份（添加到 crontab）
+# 0 0 * * 0 cp /usr/local/etc/v2ray/config.json ~/v2ray-backups/v2ray-config-$(date +\%Y\%m\%d).json
 ```
 
 ### 性能优化
 
-1. **调整系统参数**
+#### 1. 调整系统参数
+
 ```bash
 # 编辑 sysctl.conf
 nano /etc/sysctl.conf
@@ -552,43 +836,118 @@ net.core.wmem_max = 16777216
 net.ipv4.tcp_rmem = 4096 87380 16777216
 net.ipv4.tcp_wmem = 4096 65536 16777216
 net.ipv4.tcp_congestion_control = bbr
+net.ipv4.tcp_fastopen = 3
 
 # 应用配置
 sysctl -p
 ```
 
-2. **启用 BBR**
+#### 2. 启用 BBR
+
+BBR 是 Google 开发的 TCP 拥塞控制算法，可以显著提升网络性能：
+
 ```bash
-# 检查是否已启用
+# 检查内核版本（需要 4.9+）
+uname -r
+
+# 检查是否已启用 BBR
 sysctl net.ipv4.tcp_congestion_control
 
-# 如果未启用，添加内核参数
+# 如果未启用，添加以下内容到 /etc/sysctl.conf
 echo "net.core.default_qdisc=fq" >> /etc/sysctl.conf
 echo "net.ipv4.tcp_congestion_control=bbr" >> /etc/sysctl.conf
+
+# 应用配置
 sysctl -p
+
+# 验证 BBR 已启用
+sysctl net.ipv4.tcp_congestion_control
+# 应该输出：net.ipv4.tcp_congestion_control = bbr
+```
+
+#### 3. 优化 Nginx
+
+```bash
+# 编辑 Nginx 配置
+nano /etc/nginx/nginx.conf
+
+# 在 http 块中添加
+worker_processes auto;
+worker_connections 1024;
+
+# 启用 gzip 压缩
+gzip on;
+gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript;
 ```
 
 ### 监控和维护
 
-1. **监控连接数**
+#### 1. 监控连接数
+
 ```bash
-# 查看 V2Ray 连接
-ss -tn | grep :443 | wc -l  # 方案 A
+# 查看当前连接数
+ss -tn | grep :443 | wc -l
+
+# 查看连接详情
+ss -tn | grep :443
 ```
 
-2. **监控流量**
+#### 2. 监控流量
+
 ```bash
 # 安装 vnstat
 apt-get install vnstat
-vnstat -d  # 查看每日流量
-vnstat -m  # 查看每月流量
+
+# 初始化（首次使用）
+vnstat -u -i eth0  # eth0 是你的网卡名称，使用 ifconfig 查看
+
+# 查看每日流量
+vnstat -d
+
+# 查看每月流量
+vnstat -m
+
+# 实时监控
+vnstat -l
 ```
 
-3. **设置日志轮转**
+#### 3. 设置日志轮转
+
+V2Ray 和 Nginx 默认已配置日志轮转，但可以检查：
+
 ```bash
-# V2Ray 日志默认已配置轮转
-# 检查日志大小
+# 查看 V2Ray 日志大小
 du -sh /var/log/v2ray/
+
+# 查看 Nginx 日志大小
+du -sh /var/log/nginx/
+
+# 手动清理旧日志（谨慎操作）
+journalctl --vacuum-time=30d  # 保留最近 30 天
+```
+
+#### 4. 定期健康检查
+
+创建健康检查脚本：
+
+```bash
+cat > /usr/local/bin/v2ray-health-check.sh <<'EOF'
+#!/bin/bash
+if ! systemctl is-active --quiet v2ray; then
+    echo "V2Ray is down, restarting..."
+    systemctl restart v2ray
+fi
+if ! systemctl is-active --quiet nginx; then
+    echo "Nginx is down, restarting..."
+    systemctl restart nginx
+fi
+EOF
+
+chmod +x /usr/local/bin/v2ray-health-check.sh
+
+# 添加到 crontab（每 5 分钟检查一次）
+crontab -e
+# 添加：*/5 * * * * /usr/local/bin/v2ray-health-check.sh
 ```
 
 ## 📚 相关资源
@@ -596,6 +955,7 @@ du -sh /var/log/v2ray/
 - [V2Ray 官方文档](https://www.v2fly.org/)
 - [V2Ray GitHub](https://github.com/v2fly/v2ray-core)
 - [V2Ray 配置文档](https://www.v2fly.org/config/overview.html)
+- [Let's Encrypt 文档](https://letsencrypt.org/docs/)
 
 ## 📄 许可证
 
