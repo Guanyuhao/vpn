@@ -125,6 +125,45 @@ AUTO_GENERATE_WS_PATH=true
 
 更多配置选项请参考 [ENV.md](./ENV.md)。
 
+## 🚀 CI/CD 自动部署
+
+本项目支持 GitHub Actions 自动部署到服务器。
+
+### 快速开始
+
+1. **配置 GitHub Secrets**：
+   - `SSH_PRIVATE_KEY` - SSH 私钥
+   - `SERVER_HOST` - 服务器地址
+   - `SERVER_USER` - SSH 用户名（可选）
+
+2. **推送到主分支**：
+   ```bash
+   git push origin main
+   ```
+
+3. **自动部署**：
+   - 脚本文件自动上传到服务器
+   - 可在服务器上执行安装
+
+### 详细说明
+
+- 📖 [CI/CD 部署指南](./DEPLOY.md) - 完整部署文档
+- 📖 [GitHub Actions 工作流说明](./.github/workflows/README.md) - 工作流配置说明
+
+### 部署方式
+
+**方式 1: 自动部署（推送到主分支）**
+- 修改脚本后推送到主分支
+- GitHub Actions 自动上传到服务器
+
+**方式 2: 手动触发**
+- 在 GitHub Actions 页面手动触发
+- 可以指定不同的服务器和路径
+
+**方式 3: 发布版本**
+- 创建 Git 标签（如 `v1.0.0`）
+- 自动创建 Release 并打包文件
+
 ## 🔧 已安装软件检测
 
 脚本会自动检测服务器上已安装的软件：

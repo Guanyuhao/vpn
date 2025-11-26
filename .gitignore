@@ -23,3 +23,6 @@
 *.swo
 *~
 
+# GitHub Actions 本地测试
+.github/workflows/.local/
+

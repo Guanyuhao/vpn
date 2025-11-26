@@ -1,0 +1,76 @@
+name: Create Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get version from tag
+        id: get_version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION"
+
+      - name: Create release archive
+        run: |
+          mkdir -p release
+          cp v2ray-server-setup.sh release/
+          cp v2ray-manage.sh release/
+          cp README.md release/
+          cp ENV.md release/
+          if [ -f .env.example ]; then
+            cp .env.example release/
+          fi
+          
+          tar -czf v2ray-setup-${{ steps.get_version.outputs.version }}.tar.gz -C release .
+          zip -r v2ray-setup-${{ steps.get_version.outputs.version }}.zip release/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            v2ray-setup-${{ steps.get_version.outputs.version }}.tar.gz
+            v2ray-setup-${{ steps.get_version.outputs.version }}.zip
+          body: |
+            ## V2Ray 服务器安装脚本 ${{ steps.get_version.outputs.version }}
+            
+            ### 📦 包含文件
+            - `v2ray-server-setup.sh` - 安装脚本
+            - `v2ray-manage.sh` - 管理脚本
+            - `README.md` - 完整文档
+            - `ENV.md` - 环境变量配置文档
+            - `.env.example` - 环境变量模板
+            
+            ### 🚀 快速开始
+            
+            ```bash
+            # 解压文件
+            tar -xzf v2ray-setup-${{ steps.get_version.outputs.version }}.tar.gz
+            cd release
+            
+            # 创建环境变量文件
+            cp .env.example .env
+            nano .env  # 设置 DOMAIN=your_domain.com
+            
+            # 执行安装
+            sudo bash v2ray-server-setup.sh
+            ```
+            
+            ### 📚 文档
+            
+            详细文档请查看 [README.md](README.md)
+          draft: false
+          prerelease: false
+

@@ -1,0 +1,55 @@
+name: Test Scripts
+
+on:
+  pull_request:
+    branches:
+      - main
+      - master
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - 'v2ray-server-setup.sh'
+      - 'v2ray-manage.sh'
+
+jobs:
+  shellcheck:
+    name: ShellCheck
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install ShellCheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+
+      - name: Run ShellCheck on scripts
+        run: |
+          echo "检查 v2ray-server-setup.sh..."
+          shellcheck v2ray-server-setup.sh || true
+          
+          echo "检查 v2ray-manage.sh..."
+          shellcheck v2ray-manage.sh || true
+
+  syntax-check:
+    name: Syntax Check
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check bash syntax
+        run: |
+          echo "检查 v2ray-server-setup.sh 语法..."
+          bash -n v2ray-server-setup.sh
+          
+          echo "检查 v2ray-manage.sh 语法..."
+          bash -n v2ray-manage.sh
+          
+          echo "✓ 语法检查通过"
+

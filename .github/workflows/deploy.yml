@@ -1,0 +1,129 @@
+name: Deploy to Server
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - 'v2ray-server-setup.sh'
+      - 'v2ray-manage.sh'
+      - '.github/workflows/**'
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      server_host:
+        description: '服务器地址'
+        required: true
+        type: string
+      server_user:
+        description: 'SSH 用户名'
+        required: false
+        default: 'root'
+        type: string
+      deploy_path:
+        description: '部署路径'
+        required: false
+        default: '/root/v2ray-setup'
+        type: string
+      run_install:
+        description: '是否执行安装脚本'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+
+env:
+  DEPLOY_PATH: /root/v2ray-setup
+
+jobs:
+  deploy:
+    name: Deploy to Server
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.SERVER_HOST || github.event.inputs.server_host }} >> ~/.ssh/known_hosts
+
+      - name: Test SSH Connection
+        run: |
+          ssh -i ~/.ssh/id_rsa \
+            -o StrictHostKeyChecking=no \
+            ${{ secrets.SERVER_USER || github.event.inputs.server_user || 'root' }}@${{ secrets.SERVER_HOST || github.event.inputs.server_host }} \
+            "echo 'SSH connection successful'"
+
+      - name: Create deployment directory
+        run: |
+          ssh -i ~/.ssh/id_rsa \
+            -o StrictHostKeyChecking=no \
+            ${{ secrets.SERVER_USER || github.event.inputs.server_user || 'root' }}@${{ secrets.SERVER_HOST || github.event.inputs.server_host }} \
+            "mkdir -p ${{ secrets.DEPLOY_PATH || github.event.inputs.deploy_path || env.DEPLOY_PATH }}"
+
+      - name: Upload files
+        run: |
+          scp -i ~/.ssh/id_rsa \
+            -o StrictHostKeyChecking=no \
+            v2ray-server-setup.sh \
+            v2ray-manage.sh \
+            ${{ secrets.SERVER_USER || github.event.inputs.server_user || 'root' }}@${{ secrets.SERVER_HOST || github.event.inputs.server_host }}:${{ secrets.DEPLOY_PATH || github.event.inputs.deploy_path || env.DEPLOY_PATH }}/
+
+      - name: Upload .env.example if exists
+        continue-on-error: true
+        run: |
+          if [ -f .env.example ]; then
+            scp -i ~/.ssh/id_rsa \
+              -o StrictHostKeyChecking=no \
+              .env.example \
+              ${{ secrets.SERVER_USER || github.event.inputs.server_user || 'root' }}@${{ secrets.SERVER_HOST || github.event.inputs.server_host }}:${{ secrets.DEPLOY_PATH || github.event.inputs.deploy_path || env.DEPLOY_PATH }}/
+          fi
+
+      - name: Set file permissions
+        run: |
+          ssh -i ~/.ssh/id_rsa \
+            -o StrictHostKeyChecking=no \
+            ${{ secrets.SERVER_USER || github.event.inputs.server_user || 'root' }}@${{ secrets.SERVER_HOST || github.event.inputs.server_host }} \
+            "chmod +x ${{ secrets.DEPLOY_PATH || github.event.inputs.deploy_path || env.DEPLOY_PATH }}/v2ray-server-setup.sh && \
+             chmod +x ${{ secrets.DEPLOY_PATH || github.event.inputs.deploy_path || env.DEPLOY_PATH }}/v2ray-manage.sh"
+
+      - name: Display deployment info
+        run: |
+          echo "=========================================="
+          echo "部署完成！"
+          echo "=========================================="
+          echo "服务器: ${{ secrets.SERVER_HOST || github.event.inputs.server_host }}"
+          echo "部署路径: ${{ secrets.DEPLOY_PATH || github.event.inputs.deploy_path || env.DEPLOY_PATH }}"
+          echo "文件已上传:"
+          echo "  - v2ray-server-setup.sh"
+          echo "  - v2ray-manage.sh"
+          echo ""
+          echo "在服务器上执行安装："
+          echo "  ssh ${{ secrets.SERVER_USER || github.event.inputs.server_user || 'root' }}@${{ secrets.SERVER_HOST || github.event.inputs.server_host }}"
+          echo "  cd ${{ secrets.DEPLOY_PATH || github.event.inputs.deploy_path || env.DEPLOY_PATH }}"
+          echo "  sudo bash v2ray-server-setup.sh"
+          echo "=========================================="
+
+      - name: Optional - Run installation script
+        if: ${{ secrets.AUTO_INSTALL == 'true' || github.event.inputs.run_install == 'true' }}
+        run: |
+          echo "执行自动安装..."
+          ssh -i ~/.ssh/id_rsa \
+            -o StrictHostKeyChecking=no \
+            ${{ secrets.SERVER_USER || github.event.inputs.server_user || 'root' }}@${{ secrets.SERVER_HOST || github.event.inputs.server_host }} \
+            "cd ${{ secrets.DEPLOY_PATH || github.event.inputs.deploy_path || env.DEPLOY_PATH }} && \
+             sudo bash v2ray-server-setup.sh" || {
+            echo "安装失败，请手动检查"
+            exit 1
+          }
+
