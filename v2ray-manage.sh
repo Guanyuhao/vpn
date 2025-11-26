@@ -1063,6 +1063,7 @@ export_subscription() {
     
     # Python 脚本生成订阅链接
     local python_script="
+# -*- coding: utf-8 -*-
 import json
 import sys
 import base64
