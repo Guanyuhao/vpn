@@ -1184,7 +1184,8 @@ try:
         print(subscription_base64)
     
 except Exception as e:
-    print('错误: {}'.format(e), file=sys.stderr)
+    import sys
+    sys.stderr.write('错误: {}\n'.format(e))
     sys.exit(1)
 "
     
