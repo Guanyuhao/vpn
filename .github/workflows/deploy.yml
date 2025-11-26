@@ -97,6 +97,17 @@ jobs:
             "chmod +x ${{ secrets.DEPLOY_PATH || github.event.inputs.deploy_path || env.DEPLOY_PATH }}/v2ray-server-setup.sh && \
              chmod +x ${{ secrets.DEPLOY_PATH || github.event.inputs.deploy_path || env.DEPLOY_PATH }}/v2ray-manage.sh"
 
+      - name: Set auto install flag
+        id: set_auto_install
+        run: |
+          AUTO_INSTALL="${{ secrets.AUTO_INSTALL }}"
+          RUN_INSTALL="${{ github.event.inputs.run_install }}"
+          if [ "$AUTO_INSTALL" == "true" ] || [ "$RUN_INSTALL" == "true" ]; then
+            echo "should_install=true" >> $GITHUB_OUTPUT
+          else
+            echo "should_install=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Display deployment info
         run: |
           echo "=========================================="
@@ -115,7 +126,7 @@ jobs:
           echo "=========================================="
 
       - name: Optional - Run installation script
-        if: ${{ secrets.AUTO_INSTALL == 'true' || github.event.inputs.run_install == 'true' }}
+        if: steps.set_auto_install.outputs.should_install == 'true'
         run: |
           echo "执行自动安装..."
           ssh -i ~/.ssh/id_rsa \
