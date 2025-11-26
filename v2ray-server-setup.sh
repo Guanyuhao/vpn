@@ -129,7 +129,17 @@ install_dependencies
 # 安装 V2Ray
 # ============================================
 
-echo "安装 V2Ray..."
+# 检测 V2Ray 是否已安装
+if command -v v2ray > /dev/null 2>&1 || systemctl list-unit-files | grep -q v2ray.service; then
+    echo "检测到 V2Ray 已安装"
+    if systemctl is-active --quiet v2ray 2>/dev/null; then
+        echo "⚠️  V2Ray 服务正在运行中"
+        echo "   继续安装将更新 V2Ray 并重启服务"
+    fi
+    echo ""
+fi
+
+echo "安装/更新 V2Ray..."
 bash <(curl -L https://raw.githubusercontent.com/v2fly/fhs-install-v2ray/master/install-release.sh)
 
 
@@ -186,8 +196,34 @@ echo "=========================================="
 # 创建 V2Ray 配置目录
 mkdir -p "${V2RAY_CONFIG_DIR}"
 
+# 检测并备份现有配置
+V2RAY_CONFIG="${V2RAY_CONFIG_DIR}/config.json"
+if [ -f "${V2RAY_CONFIG}" ]; then
+    echo ""
+    echo "⚠️  警告: 检测到已存在的 V2Ray 配置文件"
+    echo "配置文件位置: ${V2RAY_CONFIG}"
+    
+    # 创建备份
+    BACKUP_FILE="${V2RAY_CONFIG}.backup.$(date +%Y%m%d_%H%M%S)"
+    cp "${V2RAY_CONFIG}" "${BACKUP_FILE}"
+    echo "✓ 已备份现有配置到: ${BACKUP_FILE}"
+    
+    # 检查是否有环境变量强制覆盖
+    if [ "${FORCE_OVERWRITE_CONFIG:-false}" != "true" ]; then
+        echo ""
+        echo "继续执行将覆盖现有配置文件！"
+        read -p "是否继续？(y/n): " confirm
+        if [ "$confirm" != "y" ] && [ "$confirm" != "Y" ]; then
+            echo "已取消安装"
+            exit 0
+        fi
+    else
+        echo "⚠️  检测到 FORCE_OVERWRITE_CONFIG=true，将自动覆盖配置"
+    fi
+fi
+
 # 创建 V2Ray 配置文件
-cat > "${V2RAY_CONFIG_DIR}/config.json" <<EOF
+cat > "${V2RAY_CONFIG}" <<EOF
 {
   "log": {
     "loglevel": "${LOG_LEVEL}"
@@ -308,7 +344,7 @@ echo "  查看日志: journalctl -u v2ray -f"
 echo "  重启服务: systemctl restart v2ray"
 echo "  停止服务: systemctl stop v2ray"
 echo ""
-echo "配置文件位置: ${V2RAY_CONFIG_DIR}/config.json"
+echo "配置文件位置: ${V2RAY_CONFIG}"
 echo ""
 echo "重要提示："
 echo "1. 请妥善保管 UUID，不要泄露"

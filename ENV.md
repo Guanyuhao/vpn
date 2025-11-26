@@ -136,6 +136,16 @@ sudo bash v2ray-server-setup.sh
 - **默认值**: `/usr/local/etc/v2ray`
 - **必需**: ❌ 否
 
+#### `FORCE_OVERWRITE_CONFIG`
+- **说明**: 是否强制覆盖现有配置文件（不询问确认）
+- **默认值**: `false`
+- **可选值**: `true`, `false`
+- **必需**: ❌ 否
+- **警告**: 
+  - 设置为 `true` 时，如果检测到现有配置，将自动备份并覆盖，不会询问确认
+  - 适用于自动化部署场景（如 CI/CD）
+  - **注意**: 即使设置为 `true`，脚本仍会创建备份文件
+
 #### `SSL_CERT_DIR`
 - **说明**: SSL 证书目录
 - **默认值**: `/etc/letsencrypt/live`
