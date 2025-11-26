@@ -10,6 +10,7 @@
 - [快速开始](#快速开始)
 - [环境变量配置](#环境变量配置)
 - [详细安装步骤](#详细安装步骤)
+- [CentOS 7 特殊说明](#centos-7-特殊说明)
 - [客户端配置](#客户端配置)
 - [服务器管理](#服务器管理)
 - [高级配置](#高级配置)
@@ -35,7 +36,7 @@
 
 **前置要求**：
 - ⚠️ **需要域名** - 必须拥有域名并配置 DNS 解析
-- ⚠️ **需要服务器** - Ubuntu 18.04+ 或 Debian 9+
+- ⚠️ **需要服务器** - Ubuntu 18.04+, Debian 9+, CentOS 7+, RHEL 7+
 - ⚠️ **需要 Root 权限** - 用于安装和配置服务
 
 ## 🚀 快速开始
@@ -124,7 +125,71 @@ AUTO_GENERATE_WS_PATH=true
 
 更多配置选项请参考 [ENV.md](./ENV.md)。
 
+## 🔧 已安装软件检测
+
+脚本会自动检测服务器上已安装的软件：
+
+### 自动检测功能
+
+- ✅ **Nginx 检测** - 如果已安装，跳过安装步骤
+- ✅ **Certbot 检测** - 如果已安装，跳过安装步骤
+- ✅ **宝塔面板检测** - 自动检测并使用宝塔的配置目录
+
+### 宝塔面板支持
+
+如果检测到宝塔面板，脚本会：
+
+1. **使用宝塔的配置目录**：
+   - Nginx 配置：`/www/server/nginx/conf/vhost/域名.conf`
+   - 配置文件格式符合宝塔规范
+
+2. **跳过 Nginx 安装**：
+   - Nginx 由宝塔管理，脚本只添加配置
+
+3. **SSL 证书选项**：
+   - 可以选择脚本自动申请
+   - 或提示在宝塔面板中手动申请（推荐）
+
+### 手动指定（环境变量）
+
+如果自动检测不准确，可以在 `.env` 文件中手动指定：
+
+```bash
+# 已安装 Nginx
+NGINX_INSTALLED=true
+
+# 使用宝塔面板
+BT_PANEL=true
+```
+
+## 🐧 CentOS 7 特殊说明
+
+如果您的服务器是 **CentOS 7**，请查看专门的 [CentOS 7 安装指南](./CENTOS.md)。
+
+**CentOS 7 主要特点**：
+- ✅ 脚本自动检测并使用 `yum` 包管理器
+- ✅ 自动启用 EPEL 仓库（如果需要）
+- ✅ 使用 `/etc/nginx/conf.d/` 配置目录（而非 sites-available）
+- ✅ 支持 `firewalld` 和 `iptables` 防火墙
+- ✅ 自动处理 Certbot 安装（Python 2/3）
+
+**快速开始（CentOS 7）**：
+```bash
+# 1. 准备域名并解析到服务器 IP
+# 2. 上传脚本
+scp v2ray-server-setup.sh .env root@your_server_ip:/root/
+
+# 3. 执行安装（脚本会自动检测 CentOS 7）
+ssh root@your_server_ip
+chmod +x v2ray-server-setup.sh
+sudo bash v2ray-server-setup.sh
+```
+
+详细说明请参考 [CENTOS.md](./CENTOS.md)。
+
 ### 配置防火墙
+
+#### Ubuntu/Debian（使用 ufw）
 
 ```bash
 # 开放必要端口
@@ -136,17 +201,51 @@ ufw allow 22/tcp    # SSH（如果还没开放）
 ufw enable
 ```
 
+#### CentOS/RHEL（使用 firewalld）
+
+```bash
+# 开放 HTTP 和 HTTPS 服务
+firewall-cmd --permanent --add-service=http
+firewall-cmd --permanent --add-service=https
+firewall-cmd --permanent --add-service=ssh
+
+# 重新加载防火墙规则
+firewall-cmd --reload
+
+# 查看防火墙状态
+firewall-cmd --list-all
+```
+
+#### CentOS/RHEL（使用 iptables）
+
+```bash
+# 开放端口
+iptables -A INPUT -p tcp --dport 443 -j ACCEPT
+iptables -A INPUT -p tcp --dport 80 -j ACCEPT
+iptables -A INPUT -p tcp --dport 22 -j ACCEPT
+
+# 保存规则（CentOS 7）
+service iptables save
+
+# 或（CentOS 6）
+/etc/init.d/iptables save
+```
+
 ## 📖 详细安装步骤
 
 ### 前置准备
 
 #### 1. 服务器要求
 
-- **操作系统**：Ubuntu 18.04+ 或 Debian 9+
+- **操作系统**：
+  - Ubuntu 18.04+ / Debian 9+（使用 apt-get）
+  - CentOS 7+ / RHEL 7+（使用 yum）
 - **内存**：至少 512MB（推荐 1GB+）
 - **磁盘**：至少 10GB 可用空间
 - **网络**：公网 IP 地址
 - **权限**：Root 或 sudo 权限
+
+**注意**：脚本会自动检测操作系统类型并使用相应的包管理器。
 
 #### 2. 域名准备
 

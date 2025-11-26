@@ -102,6 +102,26 @@ sudo bash v2ray-server-setup.sh
 - **必需**: ❌ 否
 - **注意**: 留空将自动生成新的 UUID
 
+#### `NGINX_INSTALLED`
+- **说明**: 是否已安装 Nginx
+- **默认值**: 自动检测
+- **可选值**: `true`, `false`, 留空（自动检测）
+- **必需**: ❌ 否
+- **注意**: 
+  - 留空：脚本自动检测
+  - `true`：跳过安装步骤
+  - `false`：强制重新安装
+
+#### `BT_PANEL`
+- **说明**: 是否使用宝塔面板
+- **默认值**: 自动检测
+- **可选值**: `true`, `false`, 留空（自动检测）
+- **必需**: ❌ 否
+- **注意**: 
+  - 留空：脚本自动检测宝塔面板
+  - `true`：使用宝塔的配置目录（`/www/server/nginx/conf/vhost/`）
+  - `false`：使用标准配置目录
+
 ### 高级配置
 
 以下配置通常不需要修改，仅在特殊情况下使用：
@@ -225,6 +245,25 @@ UUID=12345678-1234-1234-1234-123456789abc
 # .env
 DOMAIN=example.com
 LOG_LEVEL=debug
+```
+
+### 示例 7: 宝塔面板配置
+
+```bash
+# .env
+DOMAIN=example.com
+BT_PANEL=true
+NGINX_INSTALLED=true
+# 脚本会自动使用宝塔的配置目录
+```
+
+### 示例 8: 已安装 Nginx 的服务器
+
+```bash
+# .env
+DOMAIN=example.com
+NGINX_INSTALLED=true
+# 脚本会跳过 Nginx 安装，只配置现有 Nginx
 ```
 
 ## 🔍 环境变量优先级
