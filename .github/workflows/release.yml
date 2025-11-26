@@ -23,6 +23,17 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Version: $VERSION"
 
+      - name: Get domain from secrets
+        id: get_domain
+        run: |
+          DOMAIN="${{ secrets.SERVER_DOMAIN }}"
+          if [ -z "$DOMAIN" ]; then
+            DOMAIN="your_domain.com"
+            echo "⚠️ SERVER_DOMAIN secret not set, using placeholder"
+          fi
+          echo "domain=$DOMAIN" >> $GITHUB_OUTPUT
+          echo "Domain: $DOMAIN"
+
       - name: Create release archive
         run: |
           mkdir -p release
@@ -62,11 +73,15 @@ jobs:
             
             # 创建环境变量文件
             cp .env.example .env
-            nano .env  # 设置 DOMAIN=your_domain.com
+            
+            # 设置域名（替换为你的域名）
+            echo "DOMAIN=${{ steps.get_domain.outputs.domain }}" >> .env
             
             # 执行安装
             sudo bash v2ray-server-setup.sh
             ```
+            
+            **提示**：如果设置了 `SERVER_DOMAIN` Secret，上述命令会自动使用该域名。否则请手动编辑 `.env` 文件设置 `DOMAIN=your_domain.com`
             
             ### 📚 文档
             
