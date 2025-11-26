@@ -65,6 +65,19 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
+# ============================================
+# Nginx 配置查找函数（仅用于查找 WebSocket 路径）
+# ============================================
+
+# 检测宝塔面板（用于查找配置文件位置）
+detect_bt_panel() {
+    if [ -f "/www/server/panel/BT-Panel" ] || [ -d "/www/server/nginx" ]; then
+        return 0  # 检测到宝塔面板
+    else
+        return 1
+    fi
+}
+
 # 显示菜单
 show_menu() {
     echo ""
@@ -81,14 +94,16 @@ show_menu() {
     echo "8. 一键添加 VMess (TCP/mKCP/QUIC)"
     echo "9. 一键添加 VMess (WS/H2/gRPC + TLS)"
     echo "10. 查看当前配置"
-    echo "11. 测试配置文件"
-    echo "12. 更新 V2Ray"
-    echo "13. 查看连接统计"
-    echo "14. 备份配置"
-    echo "15. 恢复配置"
+    echo "11. 查看 WebSocket 路径配置"
+    echo "12. 测试配置文件"
+    echo "13. 更新 V2Ray"
+    echo "14. 查看连接统计"
+    echo "15. 备份配置"
+    echo "16. 恢复配置"
+    echo "17. 导出订阅链接"
     echo "0. 退出"
     echo "=========================================="
-    read -p "请选择操作 [0-15]: " choice
+    read -p "请选择操作 [0-17]: " choice
 }
 
 # 查看服务状态
@@ -99,13 +114,9 @@ check_status() {
     echo "=========================================="
     systemctl status v2ray --no-pager -l
     
-    if command -v nginx &> /dev/null; then
-        echo ""
-        echo "=========================================="
-        echo "Nginx 服务状态"
-        echo "=========================================="
-        systemctl status nginx --no-pager -l
-    fi
+    echo ""
+    echo -e "${YELLOW}提示: Nginx 需要手动配置和管理${NC}"
+    echo "请确保已正确配置 Nginx 反向代理"
 }
 
 # 查看实时日志
@@ -121,17 +132,15 @@ restart_service() {
     echo "重启 V2Ray 服务..."
     systemctl restart v2ray
     
-    if command -v nginx &> /dev/null; then
-        echo "重启 Nginx 服务..."
-        systemctl restart nginx
-    fi
+    echo ""
+    echo -e "${YELLOW}提示: 如果修改了 Nginx 配置，请手动重启 Nginx${NC}"
     
     sleep 2
     
     if systemctl is-active --quiet v2ray; then
-        echo -e "${GREEN}✓ 服务重启成功${NC}"
+        echo -e "${GREEN}✓ V2Ray 服务重启成功${NC}"
     else
-        echo -e "${RED}✗ 服务重启失败${NC}"
+        echo -e "${RED}✗ V2Ray 服务重启失败${NC}"
     fi
 }
 
@@ -141,14 +150,8 @@ stop_service() {
     echo "停止 V2Ray 服务..."
     systemctl stop v2ray
     
-    if command -v nginx &> /dev/null; then
-        read -p "是否同时停止 Nginx？(y/n): " stop_nginx
-        if [ "$stop_nginx" == "y" ] || [ "$stop_nginx" == "Y" ]; then
-            systemctl stop nginx
-        fi
-    fi
-    
-    echo -e "${GREEN}✓ 服务已停止${NC}"
+    echo -e "${GREEN}✓ V2Ray 服务已停止${NC}"
+    echo -e "${YELLOW}提示: Nginx 需要手动管理${NC}"
 }
 
 # 启动服务
@@ -157,17 +160,15 @@ start_service() {
     echo "启动 V2Ray 服务..."
     systemctl start v2ray
     
-    if command -v nginx &> /dev/null; then
-        echo "启动 Nginx 服务..."
-        systemctl start nginx
-    fi
+    echo ""
+    echo -e "${YELLOW}提示: 请确保 Nginx 已正确配置并运行${NC}"
     
     sleep 2
     
     if systemctl is-active --quiet v2ray; then
-        echo -e "${GREEN}✓ 服务启动成功${NC}"
+        echo -e "${GREEN}✓ V2Ray 服务启动成功${NC}"
     else
-        echo -e "${RED}✗ 服务启动失败${NC}"
+        echo -e "${RED}✗ V2Ray 服务启动失败${NC}"
     fi
 }
 
@@ -672,6 +673,179 @@ with open(config_file, 'w') as f:
     fi
 }
 
+# 提取 WebSocket 路径（从 V2Ray 配置）
+extract_ws_paths() {
+    local config_file="${1:-${V2RAY_CONFIG}}"
+    if [ ! -f "$config_file" ]; then
+        return 1
+    fi
+    
+    # 使用 Python 提取所有 WebSocket 路径
+    if check_python; then
+        local python_cmd=$(command -v python3 2>/dev/null || command -v python)
+        ${python_cmd} << EOF
+import json
+import sys
+
+try:
+    with open('${config_file}', 'r') as f:
+        config = json.load(f)
+    
+    ws_paths = []
+    for inbound in config.get('inbounds', []):
+        stream_settings = inbound.get('streamSettings', {})
+        network = stream_settings.get('network', '')
+        
+        if network == 'ws':
+            ws_settings = stream_settings.get('wsSettings', {})
+            path = ws_settings.get('path', '')
+            port = inbound.get('port', '')
+            protocol = inbound.get('protocol', '')
+            if path:
+                ws_paths.append({
+                    'path': path,
+                    'port': port,
+                    'protocol': protocol
+                })
+    
+    if ws_paths:
+        for item in ws_paths:
+            print(f"{item['path']}|{item['port']}|{item['protocol']}")
+    else:
+        print("")
+except Exception as e:
+    print("")
+EOF
+    else
+        # 使用 grep 简单提取
+        grep -o '"path": "[^"]*"' "$config_file" | sed 's/"path": "\(.*\)"/\1/' | head -1
+    fi
+}
+
+# 查找 Nginx 配置中的 WebSocket 路径
+find_nginx_ws_paths() {
+    echo ""
+    echo "查找 Nginx 配置中的 WebSocket 路径..."
+    
+    local found_paths=0
+    
+    if detect_bt_panel; then
+        # 宝塔面板：检查宝塔的配置目录
+        if [ -d "/www/server/nginx/conf/vhost" ]; then
+            echo "检查宝塔 Nginx 配置目录: /www/server/nginx/conf/vhost"
+            for conf_file in /www/server/nginx/conf/vhost/*.conf; do
+                if [ -f "$conf_file" ]; then
+                    # 查找 location 块中的路径（匹配类似 /7c09d357d7a27403 的路径）
+                    ws_paths=$(grep -oE 'location\s+/([0-9a-f]{16}|[^/]+)\s*{' "$conf_file" 2>/dev/null | sed 's/location\s\+\([^ ]*\).*/\1/' | tr -d '{')
+                    if [ ! -z "$ws_paths" ]; then
+                        echo ""
+                        echo -e "${GREEN}配置文件: $conf_file${NC}"
+                        echo "WebSocket 路径:"
+                        echo "$ws_paths" | while read path; do
+                            if [ ! -z "$path" ]; then
+                                echo "  - $path"
+                                # 显示对应的 proxy_pass
+                                proxy_pass=$(grep -A 10 "location.*$path" "$conf_file" | grep "proxy_pass" | head -1 | sed 's/.*proxy_pass\s*\([^;]*\).*/\1/')
+                                if [ ! -z "$proxy_pass" ]; then
+                                    echo "    代理到: $proxy_pass"
+                                fi
+                                found_paths=1
+                            fi
+                        done
+                    fi
+                fi
+            done
+        fi
+    else
+        # 标准环境：检查标准配置目录
+        for conf_dir in /etc/nginx/sites-available /etc/nginx/conf.d; do
+            if [ -d "$conf_dir" ]; then
+                echo "检查 Nginx 配置目录: $conf_dir"
+                for conf_file in "$conf_dir"/*.conf "$conf_dir"/v2ray*; do
+                    if [ -f "$conf_file" ]; then
+                        ws_paths=$(grep -oE 'location\s+/([0-9a-f]{16}|[^/]+)\s*{' "$conf_file" 2>/dev/null | sed 's/location\s\+\([^ ]*\).*/\1/' | tr -d '{')
+                        if [ ! -z "$ws_paths" ]; then
+                            echo ""
+                            echo -e "${GREEN}配置文件: $conf_file${NC}"
+                            echo "WebSocket 路径:"
+                            echo "$ws_paths" | while read path; do
+                                if [ ! -z "$path" ]; then
+                                    echo "  - $path"
+                                    proxy_pass=$(grep -A 10 "location.*$path" "$conf_file" | grep "proxy_pass" | head -1 | sed 's/.*proxy_pass\s*\([^;]*\).*/\1/')
+                                    if [ ! -z "$proxy_pass" ]; then
+                                        echo "    代理到: $proxy_pass"
+                                    fi
+                                    found_paths=1
+                                fi
+                            done
+                        fi
+                    fi
+                done
+            fi
+        done
+    fi
+    
+    if [ "$found_paths" = "0" ]; then
+        echo -e "${YELLOW}未找到 WebSocket 路径配置${NC}"
+        echo "提示: 请确保 Nginx 配置文件中包含 location 块"
+    fi
+}
+
+# 查看 WebSocket 路径配置
+view_ws_paths() {
+    echo ""
+    echo "=========================================="
+    echo "WebSocket 路径配置"
+    echo "=========================================="
+    
+    # 从 V2Ray 配置中提取
+    echo ""
+    echo "V2Ray 配置中的 WebSocket 路径:"
+    if [ -f "${V2RAY_CONFIG}" ]; then
+        ws_paths=$(extract_ws_paths "${V2RAY_CONFIG}")
+        if [ ! -z "$ws_paths" ]; then
+            echo "$ws_paths" | while IFS='|' read -r path port protocol; do
+                if [ ! -z "$path" ]; then
+                    echo -e "${GREEN}  路径: $path${NC}"
+                    echo "  端口: $port"
+                    echo "  协议: $protocol"
+                    echo ""
+                fi
+            done
+        else
+            echo -e "${YELLOW}  未找到 WebSocket 配置${NC}"
+        fi
+    else
+        echo -e "${RED}  V2Ray 配置文件不存在${NC}"
+    fi
+    
+    # 从 Nginx 配置中查找
+    echo ""
+    echo "Nginx 配置中的 WebSocket 路径:"
+    find_nginx_ws_paths
+    
+    # 对比检查
+    echo ""
+    echo "=========================================="
+    echo "配置一致性检查"
+    echo "=========================================="
+    
+    if [ -f "${V2RAY_CONFIG}" ]; then
+        v2ray_paths=$(extract_ws_paths "${V2RAY_CONFIG}" | cut -d'|' -f1)
+        if [ ! -z "$v2ray_paths" ]; then
+            echo "V2Ray 配置的路径:"
+            echo "$v2ray_paths" | while read path; do
+                if [ ! -z "$path" ]; then
+                    echo "  - $path"
+                fi
+            done
+            
+            echo ""
+            echo "建议: 请确保 Nginx 配置中的路径与 V2Ray 配置一致"
+        fi
+    fi
+}
+
 # 查看当前配置
 view_config() {
     echo ""
@@ -692,6 +866,19 @@ view_config() {
         echo "传输协议:"
         grep -A 5 '"streamSettings"' ${V2RAY_CONFIG} | grep -o '"network": "[^"]*"' | head -1
         echo ""
+        
+        # 显示 WebSocket 路径
+        ws_paths=$(extract_ws_paths "${V2RAY_CONFIG}")
+        if [ ! -z "$ws_paths" ]; then
+            echo "WebSocket 路径:"
+            echo "$ws_paths" | while IFS='|' read -r path port protocol; do
+                if [ ! -z "$path" ]; then
+                    echo -e "${GREEN}  - $path${NC} (端口: $port, 协议: $protocol)"
+                fi
+            done
+            echo ""
+        fi
+        
         read -p "是否查看完整配置？(y/n): " view_full
         if [ "$view_full" == "y" ] || [ "$view_full" == "Y" ]; then
             cat ${V2RAY_CONFIG} | python3 -m json.tool 2>/dev/null || cat ${V2RAY_CONFIG}
@@ -771,11 +958,35 @@ backup_config() {
     
     cp ${V2RAY_CONFIG} ${BACKUP_FILE}
     
-    if command -v nginx &> /dev/null; then
-        cp /etc/nginx/sites-available/v2ray ${BACKUP_DIR}/nginx-v2ray-${TIMESTAMP}.conf
+    # 尝试查找并备份 Nginx 配置（仅查找配置文件，不检测服务）
+    NGINX_CONFIG_FOUND=false
+    if detect_bt_panel; then
+        # 宝塔面板：检查宝塔的配置目录
+        if [ -d "/www/server/nginx/conf/vhost" ]; then
+            # 尝试查找包含 V2Ray WebSocket 路径的配置文件
+            NGINX_CONF=$(grep -r "location.*/[0-9a-f]\{16\}" /www/server/nginx/conf/vhost/ 2>/dev/null | head -1 | cut -d: -f1)
+            if [ ! -z "$NGINX_CONF" ] && [ -f "$NGINX_CONF" ]; then
+                cp "$NGINX_CONF" ${BACKUP_DIR}/nginx-v2ray-${TIMESTAMP}.conf
+                NGINX_CONFIG_FOUND=true
+                echo "已备份宝塔 Nginx 配置: $NGINX_CONF"
+            fi
+        fi
+    else
+        # 标准环境：检查标准配置目录
+        if [ -f /etc/nginx/sites-available/v2ray ]; then
+            cp /etc/nginx/sites-available/v2ray ${BACKUP_DIR}/nginx-v2ray-${TIMESTAMP}.conf
+            NGINX_CONFIG_FOUND=true
+        elif [ -f /etc/nginx/conf.d/v2ray.conf ]; then
+            cp /etc/nginx/conf.d/v2ray.conf ${BACKUP_DIR}/nginx-v2ray-${TIMESTAMP}.conf
+            NGINX_CONFIG_FOUND=true
+        fi
     fi
     
-    echo "配置已备份到: ${BACKUP_FILE}"
+    if [ "$NGINX_CONFIG_FOUND" = false ]; then
+        echo -e "${YELLOW}提示: 未找到 Nginx 配置文件（Nginx 需要手动配置）${NC}"
+    fi
+    
+    echo "V2Ray 配置已备份到: ${BACKUP_FILE}"
     echo -e "${GREEN}✓ 备份完成${NC}"
 }
 
@@ -822,6 +1033,206 @@ restore_config() {
     fi
 }
 
+# 导出订阅链接
+export_subscription() {
+    echo ""
+    echo "=========================================="
+    echo "导出订阅链接"
+    echo "=========================================="
+    
+    if [ ! -f "${V2RAY_CONFIG}" ]; then
+        echo -e "${RED}配置文件不存在${NC}"
+        return
+    fi
+    
+    # 获取服务器地址（域名或IP）
+    read -p "请输入服务器地址（域名或IP，留空自动检测）: " SERVER_ADDRESS
+    if [ -z "$SERVER_ADDRESS" ]; then
+        # 尝试从配置中获取域名，如果没有则使用IP
+        SERVER_ADDRESS=$(hostname -I | awk '{print $1}')
+        echo "使用服务器IP: ${SERVER_ADDRESS}"
+    fi
+    
+    # 使用 Python 解析配置并生成订阅链接
+    if ! check_python; then
+        echo -e "${RED}错误: 需要 Python 来生成订阅链接${NC}"
+        return
+    fi
+    
+    local python_cmd=$(command -v python3 2>/dev/null || command -v python)
+    
+    # Python 脚本生成订阅链接
+    local python_script="
+import json
+import sys
+import base64
+import urllib.parse
+
+config_file = sys.argv[1]
+server_address = sys.argv[2]
+
+try:
+    with open(config_file, 'r') as f:
+        config = json.load(f)
+    
+    links = []
+    
+    for inbound in config.get('inbounds', []):
+        protocol = inbound.get('protocol', '')
+        port = inbound.get('port', '')
+        stream_settings = inbound.get('streamSettings', {})
+        network = stream_settings.get('network', 'tcp')
+        security = stream_settings.get('security', '')
+        
+        if protocol == 'vless':
+            clients = inbound.get('settings', {}).get('clients', [])
+            for client in clients:
+                uuid = client.get('id', '')
+                flow = client.get('flow', '')
+                
+                # 构建 VLESS 链接
+                if network == 'ws':
+                    ws_settings = stream_settings.get('wsSettings', {})
+                    path = ws_settings.get('path', '/')
+                    host = ws_settings.get('headers', {}).get('Host', server_address)
+                    
+                    params = {
+                        'type': 'ws',
+                        'path': path,
+                        'host': host
+                    }
+                    if security == 'tls':
+                        params['security'] = 'tls'
+                    if flow:
+                        params['flow'] = flow
+                    
+                    query = urllib.parse.urlencode(params)
+                    vless_link = f'vless://{uuid}@{server_address}:{port}?{query}#VLESS-WS'
+                    links.append(vless_link)
+                else:
+                    params = {}
+                    if security == 'tls':
+                        params['security'] = 'tls'
+                    if flow:
+                        params['flow'] = flow
+                    
+                    query = urllib.parse.urlencode(params) if params else ''
+                    vless_link = f'vless://{uuid}@{server_address}:{port}?{query}#VLESS-TCP' if query else f'vless://{uuid}@{server_address}:{port}#VLESS-TCP'
+                    links.append(vless_link)
+        
+        elif protocol == 'vmess':
+            clients = inbound.get('settings', {}).get('clients', [])
+            for client in clients:
+                uuid = client.get('id', '')
+                alter_id = client.get('alterId', 0)
+                
+                # 构建 VMess 配置对象
+                vmess_config = {
+                    'v': '2',
+                    'ps': f'VMess-{network.upper()}',
+                    'add': server_address,
+                    'port': str(port),
+                    'id': uuid,
+                    'aid': str(alter_id),
+                    'net': network,
+                    'type': 'none',
+                    'host': '',
+                    'path': '',
+                    'tls': 'tls' if security == 'tls' else 'none'
+                }
+                
+                if network == 'ws':
+                    ws_settings = stream_settings.get('wsSettings', {})
+                    vmess_config['path'] = ws_settings.get('path', '/')
+                    vmess_config['host'] = ws_settings.get('headers', {}).get('Host', server_address)
+                elif network == 'h2':
+                    http_settings = stream_settings.get('httpSettings', {})
+                    vmess_config['path'] = http_settings.get('path', '/')
+                    vmess_config['host'] = ','.join(http_settings.get('host', [server_address]))
+                elif network == 'grpc':
+                    grpc_settings = stream_settings.get('grpcSettings', {})
+                    vmess_config['path'] = grpc_settings.get('serviceName', '')
+                
+                # 编码为 base64
+                config_json = json.dumps(vmess_config, separators=(',', ':'))
+                encoded = base64.b64encode(config_json.encode()).decode()
+                vmess_link = f'vmess://{encoded}'
+                links.append(vmess_link)
+        
+        elif protocol == 'shadowsocks':
+            method = inbound.get('settings', {}).get('method', '')
+            password = inbound.get('settings', {}).get('password', '')
+            
+            # 构建 Shadowsocks 链接
+            ss_config = f'{method}:{password}@{server_address}:{port}'
+            encoded = base64.b64encode(ss_config.encode()).decode()
+            ss_link = f'ss://{encoded}#Shadowsocks'
+            links.append(ss_link)
+    
+    # 输出所有链接
+    for link in links:
+        print(link)
+    
+    # 生成订阅链接（base64编码的所有链接）
+    if links:
+        subscription_content = '\\n'.join(links)
+        subscription_base64 = base64.b64encode(subscription_content.encode()).decode()
+        print(f'\\n=== 订阅链接（Base64） ===')
+        print(subscription_base64)
+    
+except Exception as e:
+    print(f'错误: {e}', file=sys.stderr)
+    sys.exit(1)
+"
+    
+    echo ""
+    echo "正在生成订阅链接..."
+    echo ""
+    
+    # 执行 Python 脚本
+    local temp_output=$(mktemp)
+    if ${python_cmd} -c "${python_script}" "${V2RAY_CONFIG}" "${SERVER_ADDRESS}" > "${temp_output}" 2>&1; then
+        echo -e "${GREEN}✓ 订阅链接生成成功${NC}"
+        echo ""
+        echo "=========================================="
+        echo "单个配置链接:"
+        echo "=========================================="
+        
+        # 显示单个链接
+        grep -v "=== 订阅链接" "${temp_output}" | grep -v "^$" | while read -r link; do
+            if [[ "$link" =~ ^(vmess|vless|ss):// ]]; then
+                echo -e "${GREEN}$link${NC}"
+            fi
+        done
+        
+        echo ""
+        echo "=========================================="
+        echo "订阅链接（Base64，包含所有配置）:"
+        echo "=========================================="
+        
+        # 显示订阅链接
+        subscription_line=$(grep "=== 订阅链接" "${temp_output}" -A 1 | tail -1)
+        if [ ! -z "$subscription_line" ]; then
+            echo -e "${BLUE}$subscription_line${NC}"
+            echo ""
+            echo "提示: 可以将此 Base64 字符串作为订阅链接使用"
+        fi
+        
+        echo ""
+        read -p "是否保存到文件？(y/n): " save_confirm
+        if [ "$save_confirm" == "y" ] || [ "$save_confirm" == "Y" ]; then
+            local output_file="/root/v2ray-subscription-$(date +%Y%m%d_%H%M%S).txt"
+            cp "${temp_output}" "${output_file}"
+            echo -e "${GREEN}✓ 已保存到: ${output_file}${NC}"
+        fi
+    else
+        echo -e "${RED}✗ 生成订阅链接失败${NC}"
+        cat "${temp_output}"
+    fi
+    
+    rm -f "${temp_output}"
+}
+
 # 主循环
 while true; do
     show_menu
@@ -857,19 +1268,25 @@ while true; do
             view_config
             ;;
         11)
-            test_config
+            view_ws_paths
             ;;
         12)
-            update_v2ray
+            test_config
             ;;
         13)
-            view_stats
+            update_v2ray
             ;;
         14)
-            backup_config
+            view_stats
             ;;
         15)
+            backup_config
+            ;;
+        16)
             restore_config
+            ;;
+        17)
+            export_subscription
             ;;
         0)
             echo "退出"
