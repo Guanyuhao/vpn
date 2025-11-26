@@ -1152,27 +1152,33 @@ try:
                     'v': '2',
                     'ps': 'VMess-{}'.format(network.upper()),
                     'add': server_address,
-                    'port': str(port),
+                    'port': port,  # 使用数字，不是字符串
                     'id': uuid,
-                    'aid': str(alter_id),
+                    'aid': alter_id,  # 使用数字，不是字符串
                     'net': network,
                     'type': 'none',
-                    'host': '',
-                    'path': '',
                     'tls': 'tls' if security == 'tls' else 'none'
                 }
                 
+                # 根据传输协议设置相应字段
                 if network == 'ws':
                     ws_settings = stream_settings.get('wsSettings', {})
                     vmess_config['path'] = ws_settings.get('path', '/')
-                    vmess_config['host'] = ws_settings.get('headers', {}).get('Host', server_address)
+                    host_header = ws_settings.get('headers', {}).get('Host', '')
+                    if host_header:
+                        vmess_config['host'] = host_header
                 elif network == 'h2':
                     http_settings = stream_settings.get('httpSettings', {})
                     vmess_config['path'] = http_settings.get('path', '/')
-                    vmess_config['host'] = ','.join(http_settings.get('host', [server_address]))
+                    hosts = http_settings.get('host', [])
+                    if hosts:
+                        vmess_config['host'] = ','.join(hosts)
                 elif network == 'grpc':
                     grpc_settings = stream_settings.get('grpcSettings', {})
-                    vmess_config['path'] = grpc_settings.get('serviceName', '')
+                    service_name = grpc_settings.get('serviceName', '')
+                    if service_name:
+                        vmess_config['path'] = service_name
+                # KCP/TCP/QUIC 等协议不需要 host 和 path 字段
                 
                 # 编码为 base64
                 config_json = json.dumps(vmess_config, separators=(',', ':'))
