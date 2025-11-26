@@ -1066,7 +1066,24 @@ export_subscription() {
 import json
 import sys
 import base64
-import urllib.parse
+
+# Python 2/3 兼容性处理
+try:
+    # Python 3
+    from urllib.parse import urlencode
+except ImportError:
+    # Python 2
+    try:
+        from urllib import urlencode
+    except ImportError:
+        # 如果都失败，手动实现一个简单的 urlencode
+        def urlencode(params):
+            result = []
+            for key, value in params.items():
+                if isinstance(value, unicode):
+                    value = value.encode('utf-8')
+                result.append('{}={}'.format(key, value))
+            return '&'.join(result)
 
 config_file = sys.argv[1]
 server_address = sys.argv[2]
@@ -1106,7 +1123,7 @@ try:
                     if flow:
                         params['flow'] = flow
                     
-                    query = urllib.parse.urlencode(params)
+                    query = urlencode(params)
                     vless_link = 'vless://{}@{}:{}?{}#VLESS-WS'.format(uuid, server_address, port, query)
                     links.append(vless_link)
                 else:
@@ -1116,7 +1133,7 @@ try:
                     if flow:
                         params['flow'] = flow
                     
-                    query = urllib.parse.urlencode(params) if params else ''
+                    query = urlencode(params) if params else ''
                     if query:
                         vless_link = 'vless://{}@{}:{}?{}#VLESS-TCP'.format(uuid, server_address, port, query)
                     else:
@@ -1195,7 +1212,10 @@ except Exception as e:
     
     # 执行 Python 脚本
     local temp_output=$(mktemp)
-    if ${python_cmd} -c "${python_script}" "${V2RAY_CONFIG}" "${SERVER_ADDRESS}" > "${temp_output}" 2>&1; then
+    # 将 Python 脚本写入临时文件执行（避免 heredoc 转义问题）
+    local python_temp=$(mktemp)
+    echo "${python_script}" > "${python_temp}"
+    if ${python_cmd} "${python_temp}" "${V2RAY_CONFIG}" "${SERVER_ADDRESS}" > "${temp_output}" 2>&1; then
         echo -e "${GREEN}✓ 订阅链接生成成功${NC}"
         echo ""
         echo "=========================================="
@@ -1234,7 +1254,7 @@ except Exception as e:
         cat "${temp_output}"
     fi
     
-    rm -f "${temp_output}"
+    rm -f "${temp_output}" "${python_temp}"
 }
 
 # 主循环
