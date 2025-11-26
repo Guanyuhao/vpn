@@ -710,7 +710,7 @@ try:
     
     if ws_paths:
         for item in ws_paths:
-            print(f"{item['path']}|{item['port']}|{item['protocol']}")
+            print("{}|{}|{}".format(item['path'], item['port'], item['protocol']))
     else:
         print("")
 except Exception as e:
@@ -1107,7 +1107,7 @@ try:
                         params['flow'] = flow
                     
                     query = urllib.parse.urlencode(params)
-                    vless_link = f'vless://{uuid}@{server_address}:{port}?{query}#VLESS-WS'
+                    vless_link = 'vless://{}@{}:{}?{}#VLESS-WS'.format(uuid, server_address, port, query)
                     links.append(vless_link)
                 else:
                     params = {}
@@ -1117,7 +1117,10 @@ try:
                         params['flow'] = flow
                     
                     query = urllib.parse.urlencode(params) if params else ''
-                    vless_link = f'vless://{uuid}@{server_address}:{port}?{query}#VLESS-TCP' if query else f'vless://{uuid}@{server_address}:{port}#VLESS-TCP'
+                    if query:
+                        vless_link = 'vless://{}@{}:{}?{}#VLESS-TCP'.format(uuid, server_address, port, query)
+                    else:
+                        vless_link = 'vless://{}@{}:{}#VLESS-TCP'.format(uuid, server_address, port)
                     links.append(vless_link)
         
         elif protocol == 'vmess':
@@ -1129,7 +1132,7 @@ try:
                 # 构建 VMess 配置对象
                 vmess_config = {
                     'v': '2',
-                    'ps': f'VMess-{network.upper()}',
+                    'ps': 'VMess-{}'.format(network.upper()),
                     'add': server_address,
                     'port': str(port),
                     'id': uuid,
@@ -1156,7 +1159,7 @@ try:
                 # 编码为 base64
                 config_json = json.dumps(vmess_config, separators=(',', ':'))
                 encoded = base64.b64encode(config_json.encode()).decode()
-                vmess_link = f'vmess://{encoded}'
+                vmess_link = 'vmess://{}'.format(encoded)
                 links.append(vmess_link)
         
         elif protocol == 'shadowsocks':
@@ -1164,9 +1167,9 @@ try:
             password = inbound.get('settings', {}).get('password', '')
             
             # 构建 Shadowsocks 链接
-            ss_config = f'{method}:{password}@{server_address}:{port}'
+            ss_config = '{}:{}@{}:{}'.format(method, password, server_address, port)
             encoded = base64.b64encode(ss_config.encode()).decode()
-            ss_link = f'ss://{encoded}#Shadowsocks'
+            ss_link = 'ss://{}#Shadowsocks'.format(encoded)
             links.append(ss_link)
     
     # 输出所有链接
@@ -1177,11 +1180,11 @@ try:
     if links:
         subscription_content = '\\n'.join(links)
         subscription_base64 = base64.b64encode(subscription_content.encode()).decode()
-        print(f'\\n=== 订阅链接（Base64） ===')
+        print('\\n=== 订阅链接（Base64） ===')
         print(subscription_base64)
     
 except Exception as e:
-    print(f'错误: {e}', file=sys.stderr)
+    print('错误: {}'.format(e), file=sys.stderr)
     sys.exit(1)
 "
     
